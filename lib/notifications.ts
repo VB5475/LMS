@@ -2,9 +2,6 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import Constants from "expo-constants";
 import * as Notifications from "expo-notifications";
 
-// local notifications work fine in Expo Go
-// only PUSH/remote notifications were removed in SDK 53
-// this flag lets us skip anything push-related
 const isExpoGo = Constants.appOwnership === "expo";
 
 Notifications.setNotificationHandler({
@@ -38,11 +35,9 @@ export async function scheduleBookmarkNotification(count: number) {
     title: "Nice collection! 📚",
     body: `You've bookmarked ${count} courses. Ready to start learning?`,
    },
-   trigger: null, // immediate local notification - works in Expo Go
+   trigger: null,
   });
- } catch {
-  // silently fail - notifications are non-critical
- }
+ } catch {}
 }
 
 export async function scheduleReminderNotification() {
@@ -63,17 +58,13 @@ export async function scheduleReminderNotification() {
   });
 
   await AsyncStorage.setItem("reminderScheduled", "true");
- } catch {
-  // silently fail
- }
+ } catch {}
 }
 
 export async function cancelAllNotifications() {
  try {
   await Notifications.cancelAllScheduledNotificationsAsync();
- } catch {
-  // silently fail
- }
+ } catch {}
 }
 
 export async function handleAppOpenNotification() {
@@ -89,7 +80,5 @@ export async function handleAppOpenNotification() {
    await scheduleReminderNotification();
   }
   await AsyncStorage.setItem("lastLogin", new Date().toISOString());
- } catch {
-  // silently fail
- }
+ } catch {}
 }

@@ -1,5 +1,4 @@
 import { Ionicons } from "@expo/vector-icons";
-import { StatusBar } from "expo-status-bar";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
  ActivityIndicator,
@@ -25,8 +24,8 @@ export default function HomeScreen() {
   hasMore,
   fetchCourses,
   loadMore,
-  toggleBookmark,
-  isBookmarked,
+  toggleSaveCourse,
+  isSaved,
   isEnrolled,
  } = useCourses();
 
@@ -67,12 +66,12 @@ export default function HomeScreen() {
    <CourseCard
     course={item}
     instructor={getInstructor(index)}
-    isBookmarked={isBookmarked(item.videoId)}
+    isBookmarked={isSaved(item.videoId)}
     isEnrolled={isEnrolled(item.videoId)}
-    onBookmark={toggleBookmark}
+    onSave={toggleSaveCourse}
    />
   ),
-  [instructors, isBookmarked, isEnrolled, toggleBookmark],
+  [instructors, isSaved, isEnrolled, toggleSaveCourse],
  );
 
  function renderEmpty() {
@@ -115,7 +114,7 @@ export default function HomeScreen() {
 
  return (
   <View className="flex-1 bg-gray-50">
-   <StatusBar style="dark" />
+   {/* <StatusBar style="dark" /> */}
    <OfflineBanner />
 
    {/* header */}

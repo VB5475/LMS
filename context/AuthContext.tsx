@@ -63,7 +63,6 @@ interface AuthContextType extends AuthState {
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
-// safely store a value in SecureStore - only accepts non-empty strings
 async function safeStore(key: string, value: any) {
  if (!value) return;
  const str = typeof value === "string" ? value : String(value);
@@ -71,29 +70,23 @@ async function safeStore(key: string, value: any) {
  await SecureStore.setItemAsync(key, str);
 }
 
-// extract token string from wherever the api put it
 function extractToken(data: any, key: string): string | null {
  if (!data) return null;
 
- // direct on data object
  if (typeof data[key] === "string" && data[key]) return data[key];
 
- // nested under data.data
  if (data.data && typeof data.data[key] === "string") return data.data[key];
 
- // nested under data.tokens
  if (data.tokens && typeof data.tokens[key] === "string")
   return data.tokens[key];
 
  return null;
 }
 
-// extract user object from api response
 function extractUser(data: any): User | null {
  if (!data) return null;
  if (data.user) return data.user;
  if (data.data?.user) return data.data.user;
- // sometimes the user is the data itself
  if (data._id || data.email) return data;
  return null;
 }
@@ -159,7 +152,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
      if (user) {
       dispatch({ type: "SET_USER", payload: user });
      } else {
-      // no user in response, fetch it
       const meRes = await authApi.getCurrentUser();
       const meUser = extractUser(meRes?.data);
       if (meUser) dispatch({ type: "SET_USER", payload: meUser });
@@ -192,14 +184,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const res = await authApi.register(username, email, password);
 
     if (res?.data) {
+     console.log("see the res.data:", res.data);
      const accessToken = extractToken(res.data, "accessToken");
      const refreshToken = extractToken(res.data, "refreshToken");
      const user = extractUser(res.data);
 
      if (!accessToken) {
-      // registration might not return tokens - try logging in
-      dispatch({ type: "SET_ERROR", payload: "Registered! Please log in." });
-      return false;
+      dispatch({ type: "SET_LOADING", payload: false });
+      dispatch({ type: "SET_ERROR", payload: null });
+      return true;
      }
 
      await safeStore("accessToken", accessToken);
@@ -234,9 +227,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
  const logout = useCallback(async () => {
   try {
    await authApi.logout();
-  } catch {
-   // doesnt matter
-  }
+  } catch {}
   await SecureStore.deleteItemAsync("accessToken").catch(() => {});
   await SecureStore.deleteItemAsync("refreshToken").catch(() => {});
   dispatch({ type: "LOGOUT" });

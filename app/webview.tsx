@@ -1,22 +1,20 @@
+import { Ionicons } from "@expo/vector-icons";
+import { router, useLocalSearchParams } from "expo-router";
 import React, { useRef, useState } from "react";
 import {
-  View,
-  Text,
-  TouchableOpacity,
-  ActivityIndicator,
-  StyleSheet,
+ ActivityIndicator,
+ StyleSheet,
+ Text,
+ TouchableOpacity,
+ View,
 } from "react-native";
 import { WebView, WebViewMessageEvent } from "react-native-webview";
-import { useLocalSearchParams, router } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
-import { StatusBar } from "expo-status-bar";
 
 function buildCourseHTML(title: string, youtubeUrl: string, courseId: string) {
-  // embed the youtube video directly
-  const videoId = courseId || "";
-  const embedUrl = `https://www.youtube.com/embed/${videoId}?rel=0&modestbranding=1`;
+ const videoId = courseId || "";
+ const embedUrl = `https://www.youtube.com/embed/${videoId}?rel=0&modestbranding=1`;
 
-  return `<!DOCTYPE html>
+ return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
@@ -94,121 +92,137 @@ function buildCourseHTML(title: string, youtubeUrl: string, courseId: string) {
 }
 
 export default function WebViewScreen() {
-  const params = useLocalSearchParams<{
-    courseId: string;
-    title: string;
-    category: string;
-    instructor: string;
-    youtubeUrl: string;
-  }>();
+ const params = useLocalSearchParams<{
+  courseId: string;
+  title: string;
+  category: string;
+  instructor: string;
+  youtubeUrl: string;
+ }>();
 
-  const webviewRef = useRef<WebView>(null);
-  const [loading, setLoading] = useState(true);
-  const [hasError, setHasError] = useState(false);
+ const webviewRef = useRef<WebView>(null);
+ const [loading, setLoading] = useState(true);
+ const [hasError, setHasError] = useState(false);
 
-  const { courseId = "", title = "Course", youtubeUrl = "" } = params;
+ const { courseId = "", title = "Course", youtubeUrl = "" } = params;
 
-  const htmlContent = buildCourseHTML(title, youtubeUrl, courseId);
+ const htmlContent = buildCourseHTML(title, youtubeUrl, courseId);
 
-  function handleMessage(event: WebViewMessageEvent) {
-    try {
-      const data = JSON.parse(event.nativeEvent.data);
-      if (data.type === "goBack") router.back();
-    } catch {
-      // ignore
-    }
-  }
+ function handleMessage(event: WebViewMessageEvent) {
+  try {
+   const data = JSON.parse(event.nativeEvent.data);
+   if (data.type === "goBack") router.back();
+  } catch {}
+ }
 
-  return (
-    <View style={{ flex: 1, backgroundColor: "#0f0f0f" }}>
-      <StatusBar style="light" />
+ return (
+  <View style={{ flex: 1, backgroundColor: "#0f0f0f" }}>
+   {/* <StatusBar style="light" /> */}
 
-      {/* header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={{ marginRight: 12, padding: 2 }}>
-          <Ionicons name="arrow-back" size={22} color="#fff" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle} numberOfLines={1}>{title}</Text>
-      </View>
+   {/* header */}
+   <View style={styles.header}>
+    <TouchableOpacity
+     onPress={() => router.back()}
+     style={{ marginRight: 12, padding: 2 }}>
+     <Ionicons name="arrow-back" size={22} color="#fff" />
+    </TouchableOpacity>
+    <Text style={styles.headerTitle} numberOfLines={1}>
+     {title}
+    </Text>
+   </View>
 
-      {loading && !hasError && (
-        <View style={styles.loadingOverlay}>
-          <ActivityIndicator size="large" color="#6366f1" />
-          <Text style={{ color: "#9ca3af", fontSize: 13, marginTop: 12 }}>Loading...</Text>
-        </View>
-      )}
-
-      {hasError ? (
-        <View style={styles.errorView}>
-          <Ionicons name="cloud-offline-outline" size={52} color="#4b5563" />
-          <Text style={{ color: "#9ca3af", fontWeight: "600", fontSize: 16, marginTop: 12 }}>
-            Failed to load
-          </Text>
-          <TouchableOpacity
-            onPress={() => { setHasError(false); setLoading(true); webviewRef.current?.reload(); }}
-            style={styles.retryBtn}
-          >
-            <Text style={{ color: "#fff", fontWeight: "600" }}>Retry</Text>
-          </TouchableOpacity>
-        </View>
-      ) : (
-        <WebView
-          ref={webviewRef}
-          source={{ html: htmlContent }}
-          onLoadEnd={() => setLoading(false)}
-          onError={() => { setLoading(false); setHasError(true); }}
-          onMessage={handleMessage}
-          javaScriptEnabled={true}
-          domStorageEnabled={true}
-          allowsInlineMediaPlayback={true}
-          mediaPlaybackRequiresUserAction={false}
-          style={{ flex: 1 }}
-        />
-      )}
+   {loading && !hasError && (
+    <View style={styles.loadingOverlay}>
+     <ActivityIndicator size="large" color="#6366f1" />
+     <Text style={{ color: "#9ca3af", fontSize: 13, marginTop: 12 }}>
+      Loading...
+     </Text>
     </View>
-  );
+   )}
+
+   {hasError ? (
+    <View style={styles.errorView}>
+     <Ionicons name="cloud-offline-outline" size={52} color="#4b5563" />
+     <Text
+      style={{
+       color: "#9ca3af",
+       fontWeight: "600",
+       fontSize: 16,
+       marginTop: 12,
+      }}>
+      Failed to load
+     </Text>
+     <TouchableOpacity
+      onPress={() => {
+       setHasError(false);
+       setLoading(true);
+       webviewRef.current?.reload();
+      }}
+      style={styles.retryBtn}>
+      <Text style={{ color: "#fff", fontWeight: "600" }}>Retry</Text>
+     </TouchableOpacity>
+    </View>
+   ) : (
+    <WebView
+     ref={webviewRef}
+     source={{ html: htmlContent }}
+     onLoadEnd={() => setLoading(false)}
+     onError={() => {
+      setLoading(false);
+      setHasError(true);
+     }}
+     onMessage={handleMessage}
+     javaScriptEnabled={true}
+     domStorageEnabled={true}
+     allowsInlineMediaPlayback={true}
+     mediaPlaybackRequiresUserAction={false}
+     style={{ flex: 1 }}
+    />
+   )}
+  </View>
+ );
 }
 
 const styles = StyleSheet.create({
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingTop: 52,
-    paddingBottom: 12,
-    paddingHorizontal: 16,
-    backgroundColor: "#111",
-    borderBottomWidth: 1,
-    borderBottomColor: "#1f1f1f",
-  },
-  headerTitle: {
-    flex: 1,
-    fontSize: 15,
-    fontWeight: "600",
-    color: "#fff",
-  },
-  loadingOverlay: {
-    position: "absolute",
-    top: 100,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#0f0f0f",
-    zIndex: 10,
-  },
-  errorView: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 24,
-    backgroundColor: "#0f0f0f",
-  },
-  retryBtn: {
-    marginTop: 16,
-    backgroundColor: "#6366f1",
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 12,
-  },
+ header: {
+  flexDirection: "row",
+  alignItems: "center",
+  paddingTop: 52,
+  paddingBottom: 12,
+  paddingHorizontal: 16,
+  backgroundColor: "#111",
+  borderBottomWidth: 1,
+  borderBottomColor: "#1f1f1f",
+ },
+ headerTitle: {
+  flex: 1,
+  fontSize: 15,
+  fontWeight: "600",
+  color: "#fff",
+ },
+ loadingOverlay: {
+  position: "absolute",
+  top: 100,
+  left: 0,
+  right: 0,
+  bottom: 0,
+  alignItems: "center",
+  justifyContent: "center",
+  backgroundColor: "#0f0f0f",
+  zIndex: 10,
+ },
+ errorView: {
+  flex: 1,
+  alignItems: "center",
+  justifyContent: "center",
+  padding: 24,
+  backgroundColor: "#0f0f0f",
+ },
+ retryBtn: {
+  marginTop: 16,
+  backgroundColor: "#6366f1",
+  paddingHorizontal: 24,
+  paddingVertical: 12,
+  borderRadius: 12,
+ },
 });

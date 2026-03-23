@@ -10,13 +10,13 @@ import { courseApi } from "../lib/api";
 import { scheduleBookmarkNotification } from "../lib/notifications";
 import { Course, EnrolledCourse, Instructor } from "../types";
 
-const BOOKMARKS_KEY = "bookmarked_courses_v2";
+const SAVED_COURSES_KEY = "saved_courses_v3";
 const ENROLLED_KEY = "enrolled_courses_v2";
 
 interface CourseState {
  courses: Course[];
  instructors: Instructor[];
- bookmarks: string[]; // videoId strings
+ savedCourses: string[];
  enrolled: EnrolledCourse[];
  isLoading: boolean;
  isRefreshing: boolean;
@@ -37,8 +37,8 @@ type CourseAction =
     payload: { courses: Course[]; hasMore: boolean; page: number };
    }
  | { type: "SET_INSTRUCTORS"; payload: Instructor[] }
- | { type: "SET_BOOKMARKS"; payload: string[] }
- | { type: "TOGGLE_BOOKMARK"; payload: string }
+ | { type: "SET_SAVED_COURSES"; payload: string[] }
+ | { type: "TOGGLE_SAVED_COURSE"; payload: string }
  | { type: "SET_ENROLLED"; payload: EnrolledCourse[] }
  | { type: "ENROLL_COURSE"; payload: EnrolledCourse }
  | { type: "SET_ERROR"; payload: string | null };
@@ -69,15 +69,15 @@ function courseReducer(state: CourseState, action: CourseAction): CourseState {
    };
   case "SET_INSTRUCTORS":
    return { ...state, instructors: action.payload };
-  case "SET_BOOKMARKS":
-   return { ...state, bookmarks: action.payload };
-  case "TOGGLE_BOOKMARK": {
+  case "SET_SAVED_COURSES":
+   return { ...state, savedCourses: action.payload };
+  case "TOGGLE_SAVED_COURSE": {
    const id = action.payload;
-   const exists = state.bookmarks.includes(id);
+   const exists = state.savedCourses.includes(id);
    const updated = exists
-    ? state.bookmarks.filter((b) => b !== id)
-    : [...state.bookmarks, id];
-   return { ...state, bookmarks: updated };
+    ? state.savedCourses.filter((b) => b !== id)
+    : [...state.savedCourses, id];
+   return { ...state, savedCourses: updated };
   }
   case "SET_ENROLLED":
    return { ...state, enrolled: action.payload };
@@ -103,23 +103,20 @@ function courseReducer(state: CourseState, action: CourseAction): CourseState {
 interface CourseContextType extends CourseState {
  fetchCourses: (refresh?: boolean) => Promise<void>;
  loadMore: () => Promise<void>;
- toggleBookmark: (courseId: string) => Promise<void>;
+ toggleSaveCourse: (courseId: string) => Promise<void>;
  enrollCourse: (courseId: string) => Promise<void>;
  isEnrolled: (courseId: string) => boolean;
- isBookmarked: (courseId: string) => boolean;
+ isSaved: (courseId: string) => boolean;
 }
 
 const CourseContext = createContext<CourseContextType | null>(null);
 
-// parse raw youtube video item from freeapi into our Course shape
 function parseVideo(item: any): Course | null {
  try {
   if (!item || typeof item !== "object") return null;
 
-  // freeapi wraps each video under item.items (an object, not array)
   const payload = item.items ?? item;
 
-  // id is a direct string on payload
   const videoId =
    typeof payload.id === "string" ? payload.id : (payload.id?.videoId ?? null);
 
@@ -157,7 +154,7 @@ export function CourseProvider({ children }: { children: React.ReactNode }) {
  const [state, dispatch] = useReducer(courseReducer, {
   courses: [],
   instructors: [],
-  bookmarks: [],
+  savedCourses: [],
   enrolled: [],
   isLoading: false,
   isRefreshing: false,
@@ -172,14 +169,12 @@ export function CourseProvider({ children }: { children: React.ReactNode }) {
 
  async function loadPersistedData() {
   try {
-   const bm = await AsyncStorage.getItem(BOOKMARKS_KEY);
-   if (bm) dispatch({ type: "SET_BOOKMARKS", payload: JSON.parse(bm) });
+   const bm = await AsyncStorage.getItem(SAVED_COURSES_KEY);
+   if (bm) dispatch({ type: "SET_SAVED_COURSES", payload: JSON.parse(bm) });
 
    const en = await AsyncStorage.getItem(ENROLLED_KEY);
    if (en) dispatch({ type: "SET_ENROLLED", payload: JSON.parse(en) });
-  } catch {
-   // skip
-  }
+  } catch {}
  }
 
  const fetchCourses = useCallback(async (refresh = false) => {
@@ -195,17 +190,11 @@ export function CourseProvider({ children }: { children: React.ReactNode }) {
     courseApi.getInstructors(1, 20),
    ]);
 
-   // parse videos into Course shape
-
    const rawVideos: any[] = videosRes?.data?.data || [];
    console.log("see the rawVideos:", rawVideos);
-   //  const courses: Course[] = rawVideos
-   //   .map(parseVideo)
-   //   .filter((c): c is Course => c !== null);
    const courses: Course[] = rawVideos
     .map(parseVideo)
     .filter((c): c is Course => c !== null && !!c.videoId)
-    // remove duplicates by videoId
     .filter(
      (c, index, self) =>
       index === self.findIndex((t) => t.videoId === c.videoId),
@@ -237,13 +226,9 @@ export function CourseProvider({ children }: { children: React.ReactNode }) {
    const nextPage = state.page + 1;
    const res = await courseApi.getCourses(nextPage, 20);
    const rawVideos: any[] = res?.data?.data || [];
-   //  const courses: Course[] = rawVideos
-   //   .map(parseVideo)
-   //   .filter((c): c is Course => c !== null);
    const courses: Course[] = rawVideos
     .map(parseVideo)
     .filter((c): c is Course => c !== null && !!c.videoId)
-    // remove duplicates by videoId
     .filter(
      (c, index, self) =>
       index === self.findIndex((t) => t.videoId === c.videoId),
@@ -261,21 +246,19 @@ export function CourseProvider({ children }: { children: React.ReactNode }) {
   }
  }, [state.page, state.hasMore, state.isLoading]);
 
- const toggleBookmark = useCallback(
+ const toggleSaveCourse = useCallback(
   async (courseId: string) => {
-   const exists = state.bookmarks.includes(courseId);
+   const exists = state.savedCourses.includes(courseId);
    const updated = exists
-    ? state.bookmarks.filter((b) => b !== courseId)
-    : [...state.bookmarks, courseId];
-
-   dispatch({ type: "TOGGLE_BOOKMARK", payload: courseId });
-   await AsyncStorage.setItem(BOOKMARKS_KEY, JSON.stringify(updated));
-
+    ? state.savedCourses.filter((b) => b !== courseId)
+    : [...state.savedCourses, courseId];
+   dispatch({ type: "TOGGLE_SAVED_COURSE", payload: courseId });
+   await AsyncStorage.setItem(SAVED_COURSES_KEY, JSON.stringify(updated));
    if (!exists && updated.length >= 5) {
     await scheduleBookmarkNotification(updated.length);
    }
   },
-  [state.bookmarks],
+  [state.savedCourses],
  );
 
  const enrollCourse = useCallback(
@@ -297,9 +280,9 @@ export function CourseProvider({ children }: { children: React.ReactNode }) {
   [state.enrolled],
  );
 
- const isBookmarked = useCallback(
-  (courseId: string) => state.bookmarks.includes(courseId),
-  [state.bookmarks],
+ const isSaved = useCallback(
+  (courseId: string) => state.savedCourses.includes(courseId),
+  [state.savedCourses],
  );
 
  return (
@@ -308,10 +291,10 @@ export function CourseProvider({ children }: { children: React.ReactNode }) {
     ...state,
     fetchCourses,
     loadMore,
-    toggleBookmark,
+    toggleSaveCourse,
     enrollCourse,
     isEnrolled,
-    isBookmarked,
+    isSaved,
    }}>
    {children}
   </CourseContext.Provider>

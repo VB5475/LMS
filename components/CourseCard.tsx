@@ -22,7 +22,7 @@ interface Props {
  instructor?: Instructor;
  isBookmarked: boolean;
  isEnrolled: boolean;
- onBookmark: (id: string) => void;
+ onSave: (id: string) => void;
 }
 
 function CourseCard({
@@ -30,7 +30,7 @@ function CourseCard({
  instructor,
  isBookmarked,
  isEnrolled,
- onBookmark,
+ onSave,
 }: Props) {
  const title = getCourseTitle(course);
  const description = getCourseDescription(course);
@@ -38,7 +38,6 @@ function CourseCard({
  const channel = getCourseChannel(course);
  const views = getCourseViews(course);
 
- // use instructor if available, otherwise show youtube channel as instructor
  const instructorName = instructor ? getInstructorName(instructor) : channel;
  const avatarUrl = instructor ? getInstructorAvatar(instructor) : null;
  const initial = instructor
@@ -74,7 +73,7 @@ function CourseCard({
 
     {/* bookmark */}
     <TouchableOpacity
-     onPress={() => onBookmark(course.videoId)}
+     onPress={() => onSave(course.videoId)}
      style={styles.bookmarkBtn}
      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
      <Ionicons
