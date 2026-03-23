@@ -1,32 +1,63 @@
-import { useColorScheme } from "@/hooks/use-color-scheme";
-import {
- DarkTheme,
- DefaultTheme,
- ThemeProvider,
-} from "@react-navigation/native";
-import { Stack } from "expo-router";
-import { StatusBar } from "expo-status-bar";
-import "react-native-reanimated";
+import React, { useEffect } from "react";
+import { Stack, router, useSegments } from "expo-router";
+import { View, ActivityIndicator } from "react-native";
+import { AuthProvider, useAuth } from "../context/AuthContext";
+import { CourseProvider } from "../context/CourseContext";
+import { handleAppOpenNotification } from "../lib/notifications";
 import "../global.css";
 
-export const unstable_settings = {
- anchor: "(tabs)",
-};
+function AuthGuard({ children }: { children: React.ReactNode }) {
+  const { isLoggedIn, isLoading } = useAuth();
+  const segments = useSegments();
+
+  useEffect(() => {
+    if (isLoading) return;
+
+    const inAuthGroup = segments[0] === "(auth)";
+
+    if (!isLoggedIn && !inAuthGroup) {
+      router.replace("/(auth)/login");
+    } else if (isLoggedIn && inAuthGroup) {
+      router.replace("/(tabs)");
+    }
+  }, [isLoggedIn, isLoading, segments]);
+
+  if (isLoading) {
+    return (
+      <View
+        style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#fff" }}
+      >
+        <ActivityIndicator size="large" color="#6366f1" />
+      </View>
+    );
+  }
+
+  return <>{children}</>;
+}
 
 export default function RootLayout() {
- const colorScheme = useColorScheme();
+  useEffect(() => {
+    handleAppOpenNotification().catch(() => {});
+  }, []);
 
- return (
-  <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
-   <Stack>
-    {/* <Stack.Screen name="testApp" options={{ headerShown: false }} /> */}
-    <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-    <Stack.Screen
-     name="modal"
-     options={{ presentation: "modal", title: "Modal" }}
-    />
-   </Stack>
-   <StatusBar style="auto" />
-  </ThemeProvider>
- );
+  return (
+    <AuthProvider>
+      <CourseProvider>
+        <AuthGuard>
+          <Stack screenOptions={{ headerShown: false }}>
+            <Stack.Screen name="(tabs)" />
+            <Stack.Screen name="(auth)" />
+            <Stack.Screen
+              name="course/[id]"
+              options={{ presentation: "card" }}
+            />
+            <Stack.Screen
+              name="webview"
+              options={{ presentation: "card" }}
+            />
+          </Stack>
+        </AuthGuard>
+      </CourseProvider>
+    </AuthProvider>
+  );
 }

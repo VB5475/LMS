@@ -1,109 +1,176 @@
-import { Image } from "expo-image";
-import { Platform, StyleSheet, Text, View } from "react-native";
-
-import { HelloWave } from "@/components/hello-wave";
-import ParallaxScrollView from "@/components/parallax-scroll-view";
-import { ThemedText } from "@/components/themed-text";
-import { ThemedView } from "@/components/themed-view";
-import { Link } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
+import { StatusBar } from "expo-status-bar";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import {
+ ActivityIndicator,
+ FlatList,
+ RefreshControl,
+ Text,
+ TextInput,
+ TouchableOpacity,
+ View,
+} from "react-native";
+import CourseCard from "../../components/CourseCard";
+import OfflineBanner from "../../components/OfflineBanner";
+import { useCourses } from "../../context/CourseContext";
+import { Course } from "../../types";
 
 export default function HomeScreen() {
- return (
-  <ParallaxScrollView
-   headerBackgroundColor={{ light: "#A1CEDC", dark: "#1D3D47" }}
-   headerImage={
-    <Image
-     source={require("@/assets/images/partial-react-logo.png")}
-     style={styles.reactLogo}
-    />
-   }>
-   <ThemedView style={styles.titleContainer}>
-    <ThemedText type="title">Welcome!</ThemedText>
-    <HelloWave />
-   </ThemedView>
-   <ThemedView style={styles.stepContainer}>
-    <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-    <ThemedText>
-     Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText>{" "}
-     to see changes. Press{" "}
-     <ThemedText type="defaultSemiBold">
-      {Platform.select({
-       ios: "cmd + d",
-       android: "cmd + m",
-       web: "F12",
-      })}
-     </ThemedText>{" "}
-     to open developer tools.
-    </ThemedText>
-   </ThemedView>
-   <ThemedView style={styles.stepContainer}>
-    <Link href="/modal">
-     <Link.Trigger>
-      <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-     </Link.Trigger>
-     <Link.Preview />
-     <Link.Menu>
-      <Link.MenuAction
-       title="Action"
-       icon="cube"
-       onPress={() => alert("Action pressed")}
-      />
-      <Link.MenuAction
-       title="Share"
-       icon="square.and.arrow.up"
-       onPress={() => alert("Share pressed")}
-      />
-      <Link.Menu title="More" icon="ellipsis">
-       <Link.MenuAction
-        title="Delete"
-        icon="trash"
-        destructive
-        onPress={() => alert("Delete pressed")}
-       />
-      </Link.Menu>
-     </Link.Menu>
-    </Link>
+ const {
+  courses,
+  instructors,
+  isLoading,
+  isRefreshing,
+  error,
+  hasMore,
+  fetchCourses,
+  loadMore,
+  toggleBookmark,
+  isBookmarked,
+  isEnrolled,
+ } = useCourses();
 
-    <ThemedText>
-     {`Tap the Explore tab to learn more about what's included in this starter app.`}
-    </ThemedText>
-   </ThemedView>
-   <ThemedView style={styles.stepContainer}>
-    <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-    <ThemedText>
-     {`When you're ready, run `}
-     <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to
-     get a fresh <ThemedText type="defaultSemiBold">app</ThemedText> directory.
-     This will move the current{" "}
-     <ThemedText type="defaultSemiBold">app</ThemedText> to{" "}
-     <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-    </ThemedText>
-   </ThemedView>
+ const [searchText, setSearchText] = useState("");
 
-   <View className="flex-1 items-center justify-center bg-white">
-    <Text className="text-xl font-bold text-blue-500">
-     Welcome to Nativewind!
+ useEffect(() => {
+  fetchCourses();
+ }, []);
+
+ const filteredCourses = useMemo(() => {
+  if (!searchText.trim()) return courses;
+  const q = searchText.toLowerCase();
+  return courses.filter((c) => {
+   const title = c.snippet?.title?.toLowerCase() ?? "";
+   const description = c.snippet?.description?.toLowerCase() ?? "";
+   const channel = c.snippet?.channelTitle?.toLowerCase() ?? "";
+   const tags = c.snippet?.tags?.join(" ").toLowerCase() ?? "";
+   return (
+    title.includes(q) ||
+    description.includes(q) ||
+    channel.includes(q) ||
+    tags.includes(q)
+   );
+  });
+ }, [courses, searchText]);
+
+ const handleRefresh = useCallback(() => {
+  fetchCourses(true);
+ }, [fetchCourses]);
+
+ function getInstructor(index: number) {
+  if (!instructors.length) return undefined;
+  return instructors[index % instructors.length];
+ }
+
+ const renderItem = useCallback(
+  ({ item, index }: { item: Course; index: number }) => (
+   <CourseCard
+    course={item}
+    instructor={getInstructor(index)}
+    isBookmarked={isBookmarked(item.videoId)}
+    isEnrolled={isEnrolled(item.videoId)}
+    onBookmark={toggleBookmark}
+   />
+  ),
+  [instructors, isBookmarked, isEnrolled, toggleBookmark],
+ );
+
+ function renderEmpty() {
+  if (isLoading) return null;
+  return (
+   <View className="flex-1 items-center justify-center py-20">
+    <Ionicons name="search-outline" size={48} color="#d1d5db" />
+    <Text className="text-gray-400 mt-3">
+     {searchText ? "No courses found" : "No courses available"}
     </Text>
    </View>
-  </ParallaxScrollView>
+  );
+ }
+
+ function renderFooter() {
+  if (!hasMore || !courses.length) return null;
+  return (
+   <View className="py-4 items-center">
+    <ActivityIndicator color="#6366f1" />
+   </View>
+  );
+ }
+
+ if (error && !courses.length) {
+  return (
+   <View className="flex-1 bg-gray-50 items-center justify-center px-6">
+    <Ionicons name="cloud-offline-outline" size={52} color="#d1d5db" />
+    <Text className="text-gray-700 font-semibold text-lg mt-4 text-center">
+     Something went wrong
+    </Text>
+    <Text className="text-gray-400 text-sm text-center mt-1">{error}</Text>
+    <TouchableOpacity
+     onPress={() => fetchCourses()}
+     className="bg-indigo-600 rounded-xl px-6 py-3 mt-6">
+     <Text className="text-white font-semibold">Try again</Text>
+    </TouchableOpacity>
+   </View>
+  );
+ }
+
+ return (
+  <View className="flex-1 bg-gray-50">
+   <StatusBar style="dark" />
+   <OfflineBanner />
+
+   {/* header */}
+   <View className="bg-white px-4 pt-14 pb-4 border-b border-gray-100">
+    <Text className="text-2xl font-bold text-gray-900 mb-4">
+     Explore Courses
+    </Text>
+    <View className="flex-row items-center bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5">
+     <Ionicons name="search-outline" size={18} color="#9ca3af" />
+     <TextInput
+      className="flex-1 ml-2 text-gray-900 text-sm"
+      placeholder="Search courses..."
+      placeholderTextColor="#9ca3af"
+      value={searchText}
+      onChangeText={setSearchText}
+      returnKeyType="search"
+     />
+     {searchText.length > 0 && (
+      <TouchableOpacity onPress={() => setSearchText("")}>
+       <Ionicons name="close-circle" size={18} color="#9ca3af" />
+      </TouchableOpacity>
+     )}
+    </View>
+   </View>
+
+   {isLoading && !courses.length ? (
+    <View className="flex-1 items-center justify-center">
+     <ActivityIndicator size="large" color="#6366f1" />
+     <Text className="text-gray-400 mt-3 text-sm">Loading courses...</Text>
+    </View>
+   ) : (
+    <FlatList
+     data={filteredCourses}
+     keyExtractor={(item) => `course-${item.videoId}`}
+     renderItem={renderItem}
+     ListEmptyComponent={renderEmpty}
+     ListFooterComponent={renderFooter}
+     contentContainerStyle={{ paddingTop: 16, paddingBottom: 32 }}
+     refreshControl={
+      <RefreshControl
+       refreshing={isRefreshing}
+       onRefresh={handleRefresh}
+       tintColor="#6366f1"
+       colors={["#6366f1"]}
+      />
+     }
+     onEndReached={loadMore}
+     onEndReachedThreshold={0.4}
+     showsVerticalScrollIndicator={false}
+     removeClippedSubviews={true}
+     maxToRenderPerBatch={8}
+     windowSize={10}
+     initialNumToRender={6}
+    />
+   )}
+  </View>
  );
 }
-
-const styles = StyleSheet.create({
- titleContainer: {
-  flexDirection: "row",
-  alignItems: "center",
-  gap: 8,
- },
- stepContainer: {
-  gap: 8,
-  marginBottom: 8,
- },
- reactLogo: {
-  height: 178,
-  width: 290,
-  bottom: 0,
-  left: 0,
-  position: "absolute",
- },
-});

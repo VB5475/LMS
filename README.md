@@ -1,50 +1,113 @@
-# Welcome to your Expo app 👋
+# LearnSpace — Mini LMS App
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+A React Native Expo app built as an LMS assignment. Uses freeapi.app for data — random products as courses, random users as instructors.
 
-## Get started
+## Screenshots
 
-1. Install dependencies
+> Add screenshots to `/assets/screenshots/` and reference them here after first run.
 
-   ```bash
-   npm install
-   ```
+## Setup
 
-2. Start the app
+### Prerequisites
+- Node.js 18+
+- Expo CLI: `npm install -g expo-cli`
+- Android Studio or Xcode (for emulator) or Expo Go on device
 
-   ```bash
-   npx expo start
-   ```
-
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
+### Install
 
 ```bash
-npm run reset-project
+git clone <your-repo-url>
+cd lms
+npm install
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+### Install native dependencies
 
-## Learn more
+```bash
+npx expo install @react-native-async-storage/async-storage
+npx expo install react-native-webview
+npx expo install @react-native-community/netinfo
+npx expo install expo-notifications
+```
 
-To learn more about developing your project with Expo, look at the following resources:
+### Run
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+```bash
+# clear cache on first run
+npx expo start --clear
 
-## Join the community
+# android
+npx expo start --android
 
-Join our community of developers creating universal apps.
+# ios
+npx expo start --ios
+```
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+### Build APK (development build)
+
+```bash
+npx expo run:android
+```
+
+Or with EAS Build:
+```bash
+npm install -g eas-cli
+eas build --platform android --profile preview
+```
+
+## Environment Variables
+
+No `.env` needed — the API base (`https://api.freeapi.app`) is hardcoded in `lib/api.ts`. If you want to swap it out:
+
+```ts
+// lib/api.ts
+const BASE_URL = "https://api.freeapi.app"; // change this
+```
+
+## Project Structure
+
+```
+app/
+  _layout.tsx          root layout, auth guard, context providers
+  (auth)/              login + register screens
+  (tabs)/              bottom tab screens (courses, bookmarks, profile)
+  course/[id].tsx      course detail
+  webview.tsx          embedded WebView content viewer
+context/
+  AuthContext.tsx      auth state + SecureStore token management
+  CourseContext.tsx    courses, bookmarks, enrolled — AsyncStorage persistence
+lib/
+  api.ts               fetch wrapper with retry logic + token refresh
+  notifications.ts     expo-notifications helpers
+hooks/
+  useNetworkStatus.ts  NetInfo-based offline detection
+components/
+  CourseCard.tsx       memoized course list item
+  OfflineBanner.tsx    red banner shown when offline
+types/
+  index.ts             all TypeScript interfaces
+```
+
+## Key Architectural Decisions
+
+**Auth guard in root layout** — `useSegments()` + `useEffect` redirect. Runs after every auth state change. Loading spinner shown while token is validated on startup so there's no flash to login screen for already-authenticated users.
+
+**SecureStore for tokens, AsyncStorage for app data** — tokens need encryption so they go in SecureStore. Bookmarks and enrolled courses are not sensitive so AsyncStorage is fine there. Both are loaded on context init.
+
+**useReducer over useState for context** — auth and course state have enough interdependent fields that reducer actions are cleaner than a pile of individual setters. Also makes the state transitions predictable.
+
+**Memoized course cards** — `React.memo` on CourseCard prevents re-renders when the list scrolls and parent re-renders. Combined with FlatList's `removeClippedSubviews`, `maxToRenderPerBatch: 8`, and `windowSize: 10` for smooth scrolling on large lists.
+
+**API retry logic** — `apiCall()` retries up to 2 times with 1s/2s backoff before throwing. Handles 401 by attempting token refresh first. AbortController gives a 10s timeout per request.
+
+**WebView bidirectional communication** — Native injects course data via `injectedJavaScriptBeforeContentLoaded`. WebView sends lesson completion events back via `window.ReactNativeWebView.postMessage()`. Handled in `onMessage`.
+
+**Notification scheduling** — Bookmark notification fires immediately when bookmarks reach 5+. Reminder notification schedules 24h out on every app open, cancelling any previous one so it always counts from last visit.
+
+## Known Issues / Limitations
+
+- Profile picture update UI exists but the actual upload API call is not implemented (freeapi's multipart upload requires additional handling)
+- `loadMore` pagination: freeapi's `/randomproducts` doesn't have true pagination — it returns the same data each page, so `hasMore` will stay false after first load in practice
+- Notifications on Android 13+ require explicit permission granted by user — handled via `requestNotificationPermissions()` before scheduling
+- No deep linking configured
+- No landscape-specific layout adjustments (the app works in landscape but wasn't specifically designed for it)
