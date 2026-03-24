@@ -132,6 +132,7 @@ export interface EnrolledCourse {
  courseId: string;
  enrolledAt: string;
  progress: number;
+ completedSections?: number[];
 }
 
 export interface UserPreferences {

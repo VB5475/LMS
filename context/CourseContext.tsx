@@ -41,7 +41,15 @@ type CourseAction =
  | { type: "TOGGLE_SAVED_COURSE"; payload: string }
  | { type: "SET_ENROLLED"; payload: EnrolledCourse[] }
  | { type: "ENROLL_COURSE"; payload: EnrolledCourse }
- | { type: "SET_ERROR"; payload: string | null };
+ | { type: "SET_ERROR"; payload: string | null }
+ | {
+    type: "UPDATE_PROGRESS";
+    payload: {
+     courseId: string;
+     progress: number;
+     completedSections?: number[];
+    };
+   };
 
 function courseReducer(state: CourseState, action: CourseAction): CourseState {
  switch (action.type) {
@@ -95,6 +103,19 @@ function courseReducer(state: CourseState, action: CourseAction): CourseState {
     isLoading: false,
     isRefreshing: false,
    };
+  case "UPDATE_PROGRESS": {
+   const updated = state.enrolled.map((e) =>
+    e.courseId === action.payload.courseId
+     ? {
+        ...e,
+        progress: action.payload.progress,
+        completedSections:
+         action.payload.completedSections ?? e.completedSections,
+       }
+     : e,
+   );
+   return { ...state, enrolled: updated };
+  }
   default:
    return state;
  }
@@ -107,6 +128,7 @@ interface CourseContextType extends CourseState {
  enrollCourse: (courseId: string) => Promise<void>;
  isEnrolled: (courseId: string) => boolean;
  isSaved: (courseId: string) => boolean;
+ updateProgress: (courseId: string, progress: number) => Promise<void>;
 }
 
 const CourseContext = createContext<CourseContextType | null>(null);
@@ -246,20 +268,28 @@ export function CourseProvider({ children }: { children: React.ReactNode }) {
   }
  }, [state.page, state.hasMore, state.isLoading]);
 
- const toggleSaveCourse = useCallback(
-  async (courseId: string) => {
-   const exists = state.savedCourses.includes(courseId);
+ const toggleSaveCourse = useCallback(async (courseId: string) => {
+  try {
+   const stored = await AsyncStorage.getItem(SAVED_COURSES_KEY);
+   const current: string[] = stored ? JSON.parse(stored) : [];
+
+   const exists = current.includes(courseId);
    const updated = exists
-    ? state.savedCourses.filter((b) => b !== courseId)
-    : [...state.savedCourses, courseId];
-   dispatch({ type: "TOGGLE_SAVED_COURSE", payload: courseId });
+    ? current.filter((b) => b !== courseId)
+    : [...current, courseId];
+
+   dispatch({ type: "SET_SAVED_COURSES", payload: updated });
    await AsyncStorage.setItem(SAVED_COURSES_KEY, JSON.stringify(updated));
+
+   console.log("exists:", exists, "| updated.length:", updated.length);
+
    if (!exists && updated.length >= 5) {
     await scheduleBookmarkNotification(updated.length);
    }
-  },
-  [state.savedCourses],
- );
+  } catch (err) {
+   console.log("toggleSaveCourse error:", err);
+  }
+ }, []);
 
  const enrollCourse = useCallback(
   async (courseId: string) => {
@@ -285,6 +315,28 @@ export function CourseProvider({ children }: { children: React.ReactNode }) {
   [state.savedCourses],
  );
 
+ const updateProgress = useCallback(
+  async (courseId: string, progress: number, completedSections?: number[]) => {
+   try {
+    const stored = await AsyncStorage.getItem(ENROLLED_KEY);
+    const current: EnrolledCourse[] = stored ? JSON.parse(stored) : [];
+    const updated = current.map((e) =>
+     e.courseId === courseId
+      ? { ...e, progress, ...(completedSections && { completedSections }) }
+      : e,
+    );
+    dispatch({
+     type: "UPDATE_PROGRESS",
+     payload: { courseId, progress, completedSections },
+    });
+    await AsyncStorage.setItem(ENROLLED_KEY, JSON.stringify(updated));
+   } catch (err) {
+    console.log("updateProgress error:", err);
+   }
+  },
+  [],
+ );
+
  return (
   <CourseContext.Provider
    value={{
@@ -293,6 +345,7 @@ export function CourseProvider({ children }: { children: React.ReactNode }) {
     loadMore,
     toggleSaveCourse,
     enrollCourse,
+    updateProgress,
     isEnrolled,
     isSaved,
    }}>

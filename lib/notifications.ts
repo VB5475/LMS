@@ -53,6 +53,7 @@ export async function scheduleReminderNotification() {
    trigger: {
     type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
     seconds: 60 * 60 * 24,
+    // seconds: 5,
     repeats: false,
    },
   });

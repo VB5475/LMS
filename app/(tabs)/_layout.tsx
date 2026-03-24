@@ -1,10 +1,12 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Tabs } from "expo-router";
 import { useMemo } from "react";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useCourses } from "../../context/CourseContext";
 
 export default function TabsLayout() {
  const { courses, savedCourses, enrolled } = useCourses();
+ const insets = useSafeAreaInsets();
  const allCount = useMemo(() => {
   const enrolledIds = new Set(enrolled.map((e) => e.courseId));
   const savedSet = new Set(savedCourses);
@@ -21,9 +23,10 @@ export default function TabsLayout() {
     tabBarStyle: {
      borderTopColor: "#f3f4f6",
      borderTopWidth: 1,
-     paddingBottom: 6,
+     paddingBottom: insets.bottom || 6,
+     //  marginBottom: 10,
      paddingTop: 6,
-     height: 60,
+     height: 60 + insets.bottom,
     },
     tabBarLabelStyle: {
      fontSize: 11,

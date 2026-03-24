@@ -3,16 +3,49 @@ import { router, useLocalSearchParams } from "expo-router";
 import React, { useRef, useState } from "react";
 import {
  ActivityIndicator,
- StyleSheet,
+ Linking,
  Text,
  TouchableOpacity,
  View,
 } from "react-native";
 import { WebView, WebViewMessageEvent } from "react-native-webview";
+import { useCourses } from "../context/CourseContext";
 
-function buildCourseHTML(title: string, youtubeUrl: string, courseId: string) {
- const videoId = courseId || "";
- const embedUrl = `https://www.youtube.com/embed/${videoId}?rel=0&modestbranding=1`;
+function buildCourseHTML(
+ title: string,
+ courseId: string,
+ completedSections: number[],
+) {
+ const thumbnailUrl = `https://img.youtube.com/vi/${courseId}/hqdefault.jpg`;
+ const youtubeAppUrl = `https://www.youtube.com/watch?v=${courseId}`;
+ const initialPct = Math.round((completedSections.length / 5) * 100);
+
+ const sectionsData = [
+  { id: 1, name: "Introduction", dur: "5 min" },
+  { id: 2, name: "Core Concepts", dur: "15 min" },
+  { id: 3, name: "Deep Dive", dur: "20 min" },
+  { id: 4, name: "Practical Examples", dur: "18 min" },
+  { id: 5, name: "Summary", dur: "8 min" },
+ ];
+
+ const sectionsHTML = sectionsData
+  .map((s) => {
+   const done = completedSections.includes(s.id);
+   return `
+      <div class="lesson" onclick="done(${s.id})">
+        <div class="num" id="n${s.id}" style="${done ? "background:#14532d;color:#4ade80;" : ""}">
+          ${s.id}
+        </div>
+        <div class="info-col">
+          <div class="lname">${s.name}</div>
+          <div class="ldur">${s.dur}</div>
+        </div>
+        <span class="check" id="c${s.id}" style="${done ? "color:#4ade80;" : ""}">
+          ${done ? "✓" : "○"}
+        </span>
+      </div>`;
+  })
+  .join("");
 
  return `<!DOCTYPE html>
 <html lang="en">
@@ -21,52 +54,73 @@ function buildCourseHTML(title: string, youtubeUrl: string, courseId: string) {
   <title>${title}</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: #0f0f0f; color: #fff; }
-    .video-wrap { position: relative; width: 100%; padding-bottom: 56.25%; background: #000; }
-    .video-wrap iframe { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: none; }
-    .info { padding: 16px; background: #111; }
-    .title { font-size: 16px; font-weight: 700; line-height: 1.4; margin-bottom: 12px; }
-    .progress-card { background: #1a1a1a; border-radius: 12px; padding: 16px; margin-bottom: 14px; }
+    body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: #f9fafb; color: #111827; }
+    .video-wrap { position: relative; width: 100%; padding-bottom: 56.25%; background: #000; cursor: pointer; }
+    .video-wrap img { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; }
+    .play-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; }
+    .play-btn { width: 64px; height: 64px; background: #ff0000; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+    .play-arrow { width: 0; height: 0; border-top: 12px solid transparent; border-bottom: 12px solid transparent; border-left: 22px solid white; margin-left: 5px; }
+    .yt-label { position: absolute; bottom: 8px; right: 8px; background: rgba(0,0,0,0.7); color: white; font-size: 11px; padding: 3px 8px; border-radius: 4px; }
+    .info { padding: 16px; background: #fff; }
+    .title { font-size: 16px; font-weight: 700; line-height: 1.4; margin-bottom: 12px; color: #111827; }
+    .progress-card { background: #f3f4f6; border-radius: 12px; padding: 16px; margin-bottom: 14px; }
     .section-label { font-size: 11px; font-weight: 700; color: #6366f1; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 10px; }
     .pct-row { display: flex; justify-content: space-between; margin-bottom: 8px; }
-    .pct-label { font-size: 12px; color: #9ca3af; }
-    .pct-val { font-size: 12px; font-weight: 700; color: #818cf8; }
-    .bar { background: #374151; border-radius: 100px; height: 6px; overflow: hidden; }
-    .fill { height: 100%; background: linear-gradient(90deg, #6366f1, #818cf8); width: 0%; transition: width 0.5s; }
-    .lessons { background: #1a1a1a; border-radius: 12px; padding: 12px; margin-bottom: 14px; }
-    .lesson { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid #2a2a2a; cursor: pointer; }
+    .pct-label { font-size: 12px; color: #6b7280; }
+    .pct-val { font-size: 12px; font-weight: 700; color: #6366f1; }
+    .bar { background: #e5e7eb; border-radius: 100px; height: 6px; overflow: hidden; }
+    .fill { height: 100%; background: linear-gradient(90deg, #6366f1, #818cf8); transition: width 0.5s; }
+    .lessons { background: #f3f4f6; border-radius: 12px; padding: 12px; margin-bottom: 14px; }
+    .lesson { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid #e5e7eb; cursor: pointer; }
     .lesson:last-child { border-bottom: none; }
-    .num { width: 28px; height: 28px; background: #2a2a2a; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: #818cf8; flex-shrink: 0; }
+    .num { width: 28px; height: 28px; background: #e0e7ff; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: #6366f1; flex-shrink: 0; }
     .info-col { flex: 1; }
-    .lname { font-size: 13px; font-weight: 500; }
-    .ldur { font-size: 11px; color: #6b7280; margin-top: 2px; }
-    .check { font-size: 15px; color: #374151; }
+    .lname { font-size: 13px; font-weight: 500; color: #111827; }
+    .ldur { font-size: 11px; color: #9ca3af; margin-top: 2px; }
+    .check { font-size: 15px; color: #d1d5db; }
     .back-btn { background: #6366f1; color: white; border: none; border-radius: 12px; padding: 14px; font-size: 14px; font-weight: 600; width: 100%; cursor: pointer; }
   </style>
 </head>
 <body>
-  <div class="video-wrap">
-    <iframe src="${embedUrl}" allowfullscreen allow="autoplay; encrypted-media"></iframe>
+  <div class="video-wrap" onclick="openVideo()">
+    <img src="${thumbnailUrl}" />
+    <div class="play-overlay">
+      <div class="play-btn">
+        <div class="play-arrow"></div>
+      </div>
+    </div>
+    <div class="yt-label">Tap to watch on YouTube</div>
   </div>
   <div class="info">
     <div class="title">${title}</div>
     <div class="progress-card">
       <div class="section-label">Your Progress</div>
-      <div class="pct-row"><span class="pct-label">Completion</span><span class="pct-val" id="pv">0%</span></div>
-      <div class="bar"><div class="fill" id="pf"></div></div>
+      <div class="pct-row">
+        <span class="pct-label">Completion</span>
+        <span class="pct-val" id="pv">${initialPct}%</span>
+      </div>
+      <div class="bar">
+        <div class="fill" id="pf" style="width:${initialPct}%"></div>
+      </div>
     </div>
     <div class="lessons">
       <div class="section-label">Sections</div>
-      <div class="lesson" onclick="done(1)"><div class="num" id="n1">1</div><div class="info-col"><div class="lname">Introduction</div><div class="ldur">5 min</div></div><span class="check" id="c1">○</span></div>
-      <div class="lesson" onclick="done(2)"><div class="num" id="n2">2</div><div class="info-col"><div class="lname">Core Concepts</div><div class="ldur">15 min</div></div><span class="check" id="c2">○</span></div>
-      <div class="lesson" onclick="done(3)"><div class="num" id="n3">3</div><div class="info-col"><div class="lname">Deep Dive</div><div class="ldur">20 min</div></div><span class="check" id="c3">○</span></div>
-      <div class="lesson" onclick="done(4)"><div class="num" id="n4">4</div><div class="info-col"><div class="lname">Practical Examples</div><div class="ldur">18 min</div></div><span class="check" id="c4">○</span></div>
-      <div class="lesson" onclick="done(5)"><div class="num" id="n5">5</div><div class="info-col"><div class="lname">Summary</div><div class="ldur">8 min</div></div><span class="check" id="c5">○</span></div>
+      ${sectionsHTML}
     </div>
     <button class="back-btn" onclick="goBack()">← Back to App</button>
   </div>
   <script>
-    var completed = [];
+    var completed = ${JSON.stringify(completedSections)};
+
+    function openVideo() {
+      if (window.ReactNativeWebView) {
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'openVideo',
+          url: '${youtubeAppUrl}'
+        }));
+      }
+    }
+
     function done(n) {
       if (completed.indexOf(n) !== -1) return;
       completed.push(n);
@@ -78,9 +132,15 @@ function buildCourseHTML(title: string, youtubeUrl: string, courseId: string) {
       document.getElementById('pf').style.width = pct + '%';
       document.getElementById('pv').textContent = pct + '%';
       if (window.ReactNativeWebView) {
-        window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'progress', progress: pct, courseId: '${courseId}' }));
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'progress',
+          progress: pct,
+          completed: completed,
+          courseId: '${courseId}'
+        }));
       }
     }
+
     function goBack() {
       if (window.ReactNativeWebView) {
         window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'goBack' }));
@@ -104,52 +164,52 @@ export default function WebViewScreen() {
  const [loading, setLoading] = useState(true);
  const [hasError, setHasError] = useState(false);
 
- const { courseId = "", title = "Course", youtubeUrl = "" } = params;
+ const { updateProgress, enrolled } = useCourses();
+ const { courseId = "", title = "Course" } = params;
 
- const htmlContent = buildCourseHTML(title, youtubeUrl, courseId);
+ const enrolledCourse = enrolled.find((e) => e.courseId === courseId);
+ const completedSections: number[] =
+  (enrolledCourse as any)?.completedSections ?? [];
+ const htmlContent = buildCourseHTML(title, courseId, completedSections);
 
- function handleMessage(event: WebViewMessageEvent) {
+ async function handleMessage(event: WebViewMessageEvent) {
   try {
    const data = JSON.parse(event.nativeEvent.data);
    if (data.type === "goBack") router.back();
+   if (data.type === "openVideo") await Linking.openURL(data.url);
+   if (data.type === "progress") {
+    await updateProgress(courseId, data.progress, data.completed);
+   }
   } catch {}
  }
 
  return (
-  <View style={{ flex: 1, backgroundColor: "#0f0f0f" }}>
-   {/* <StatusBar style="light" /> */}
-
+  <View className="flex-1 bg-white">
    {/* header */}
-   <View style={styles.header}>
-    <TouchableOpacity
-     onPress={() => router.back()}
-     style={{ marginRight: 12, padding: 2 }}>
-     <Ionicons name="arrow-back" size={22} color="#fff" />
+   <View className="flex-row items-center bg-white px-4 pb-3 pt-14 border-b border-gray-100">
+    <TouchableOpacity onPress={() => router.back()} className="mr-3 p-1">
+     <Ionicons name="arrow-back" size={22} color="#111827" />
     </TouchableOpacity>
-    <Text style={styles.headerTitle} numberOfLines={1}>
+    <Text
+     className="flex-1 text-gray-900 font-semibold text-base"
+     numberOfLines={1}>
      {title}
     </Text>
    </View>
 
+   {/* loading overlay */}
    {loading && !hasError && (
-    <View style={styles.loadingOverlay}>
+    <View className="absolute top-24 left-0 right-0 bottom-0 items-center justify-center bg-white z-10">
      <ActivityIndicator size="large" color="#6366f1" />
-     <Text style={{ color: "#9ca3af", fontSize: 13, marginTop: 12 }}>
-      Loading...
-     </Text>
+     <Text className="text-gray-400 text-sm mt-3">Loading...</Text>
     </View>
    )}
 
+   {/* error state */}
    {hasError ? (
-    <View style={styles.errorView}>
-     <Ionicons name="cloud-offline-outline" size={52} color="#4b5563" />
-     <Text
-      style={{
-       color: "#9ca3af",
-       fontWeight: "600",
-       fontSize: 16,
-       marginTop: 12,
-      }}>
+    <View className="flex-1 items-center justify-center p-6 bg-gray-50">
+     <Ionicons name="cloud-offline-outline" size={52} color="#d1d5db" />
+     <Text className="text-gray-700 font-semibold text-base mt-3">
       Failed to load
      </Text>
      <TouchableOpacity
@@ -158,8 +218,8 @@ export default function WebViewScreen() {
        setLoading(true);
        webviewRef.current?.reload();
       }}
-      style={styles.retryBtn}>
-      <Text style={{ color: "#fff", fontWeight: "600" }}>Retry</Text>
+      className="bg-indigo-600 px-6 py-3 rounded-xl mt-4">
+      <Text className="text-white font-semibold">Retry</Text>
      </TouchableOpacity>
     </View>
    ) : (
@@ -176,53 +236,10 @@ export default function WebViewScreen() {
      domStorageEnabled={true}
      allowsInlineMediaPlayback={true}
      mediaPlaybackRequiresUserAction={false}
-     style={{ flex: 1 }}
+     originWhitelist={["*"]}
+     className="flex-1"
     />
    )}
   </View>
  );
 }
-
-const styles = StyleSheet.create({
- header: {
-  flexDirection: "row",
-  alignItems: "center",
-  paddingTop: 52,
-  paddingBottom: 12,
-  paddingHorizontal: 16,
-  backgroundColor: "#111",
-  borderBottomWidth: 1,
-  borderBottomColor: "#1f1f1f",
- },
- headerTitle: {
-  flex: 1,
-  fontSize: 15,
-  fontWeight: "600",
-  color: "#fff",
- },
- loadingOverlay: {
-  position: "absolute",
-  top: 100,
-  left: 0,
-  right: 0,
-  bottom: 0,
-  alignItems: "center",
-  justifyContent: "center",
-  backgroundColor: "#0f0f0f",
-  zIndex: 10,
- },
- errorView: {
-  flex: 1,
-  alignItems: "center",
-  justifyContent: "center",
-  padding: 24,
-  backgroundColor: "#0f0f0f",
- },
- retryBtn: {
-  marginTop: 16,
-  backgroundColor: "#6366f1",
-  paddingHorizontal: 24,
-  paddingVertical: 12,
-  borderRadius: 12,
- },
-});
